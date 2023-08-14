@@ -1,69 +1,74 @@
-import pandas as pd
-import numpy as np
-import talib
-import ccxt
+import os
+import asyncio
+from quotexapi.stable_api import Quotex
 
 
-api_key = 'your_api_key'
-secret_key = 'your_secret_key'
-
-
-exchange = ccxt.binance({
-    'apiKey': api_key,
-    'secret': secret_key,
-    'enableRateLimit': True
-})
+client = Quotex(email="user@gmail.com", password="pwd")
+client.debug_ws_enable = False
+check_connect, message = client.connect()
+print(check_connect, message)
 
 
 
-def trading_strategy(df):
-    # Calculate technical indicators using TA-Lib
-    df['SMA20'] = talib.SMA(df['close'], timeperiod=20)
-    df['SMA50'] = talib.SMA(df['close'], timeperiod=50)
-    df['RSI'] = talib.RSI(df['close'], timeperiod=14)
-
-    # Entry condition
-    if df['SMA20'].iloc[-1] > df['SMA50'].iloc[-1] and df['RSI'].iloc[-1] < 30:
-        return 'buy'
-
-    # Exit condition
-    elif df['SMA20'].iloc[-1] < df['SMA50'].iloc[-1]:
-        return 'sell'
-
-    # Hold if no signal
+def asset_parse(asset):
+    new_asset = asset[:3] + "/" + asset[3:]
+    if "_otc" in asset:
+        asset = new_asset.replace("_otc", " (OTC)")
     else:
-        return 'hold'
-    
+        asset = new_asset
+    return asset
 
 
-def get_market_data(symbol, timeframe):
-    ohlc = exchange.fetch_ohlcv(symbol=symbol, timeframe=timeframe)
-    df = pd.DataFrame(ohlc, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('timestamp', inplace=True)
-    return df
+async def login(attempts=5):
+    check, reason = await client.connect()
+    print("Start your robot")
+    attempt = 1
+    while attempt <= attempts:
+        if not client.check_connect():
+            print(f"Tentando reconectar, tentativa {attempt} de {attempts}")
+            check, reason = await client.connect()
+            if check:
+                print("Reconectado com sucesso!!!")
+                break
+            else:
+                print("Erro ao reconectar.")
+                attempt += 1
+                if os.path.isfile("session.json"):
+                    os.remove("session.json")
+        elif not check:
+            attempt += 1
+        else:
+            break
+        await asyncio.sleep(5)
+    return check, reason
 
 
-def execute_trade(symbol, side, quantity):
-    exchange.create_order(symbol=symbol, type='market', side=side, amount=quantity)
-
-
-def main():
-    symbol = 'BTC/USDT'
-    timeframe = '1h'
-    quantity = 0.001
-
-    while True:
-        # Get market data
-        df = get_market_data(symbol, timeframe)
-
-        # Execute trades based on trading strategy
-        signal = trading_strategy(df)
-        if signal == 'buy':
-            execute_trade(symbol, 'buy', quantity)
-        elif signal == 'sell':
-            execute_trade(symbol, 'sell', quantity)
-
-        # Wait for next candle
-        time.sleep(60 * 60)  # wait for 1 hour before checking again
-
+async def buy_and_check_win():
+    check_connect, message = await login()
+    print(check_connect, message)
+    if check_connect:
+        client.change_account("PRACTICE")
+        print("Saldo corrente: ", await client.get_balance())
+        amount = 5
+        asset = "EURUSD_otc"  # "EURUSD_otc"
+        direction = "call"
+        duration = 60  # in seconds
+        asset_query = asset_parse(asset)
+        asset_open = client.check_asset_open(asset_query)
+        if asset_open[2]:
+            print("OK: Asset está aberto.")
+            status, buy_info = await client.buy(amount, asset, direction, duration)
+            print(status, buy_info)
+            if status:
+                print("Aguardando resultado...")
+                if await client.check_win(buy_info["id"]):
+                    print(f"\nWin!!! \nVencemos moleque!!!\nLucro: R$ {client.get_profit()}")
+                else:
+                    print(f"\nLoss!!! \nPerdemos moleque!!!\nPrejuízo: R$ {client.get_profit()}")
+            else:
+                print("Falha na operação!!!")
+        else:
+            print("ERRO: Asset está fechado.")
+        print("Saldo Atual: ", await client.get_balance())
+        print("Saindo...")
+    client.close()
