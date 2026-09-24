@@ -1,0 +1,32 @@
+# FxBot settings. Everything here is optional: delete a line to fall back to the default.
+
+rates:
+  # Where today's central bank rates come from, tried in order:
+  #   site - the rates table on your Forex Chart page (a URL or a local path to index.html)
+  #   bis  - Bank for International Settlements (official, but 1-2 weeks behind a rate change)
+  sources: [site, bis]
+  site_url: https://forexchart-kibet.web.app/
+  # Pin a rate by hand if a central bank just moved and nothing above has caught up yet:
+  manual: {}
+  #   JPY: 1.25
+
+cot:
+  # A currency whose commercials are within this % of open interest from the zero line is
+  # treated as flat (on neither side). 0 = use the zero line exactly.
+  neutral_band_pct: 2.0
+
+strategy:
+  # A pair is grade A when the COT sides agree AND you earn at least this interest
+  # differential (percentage points) in the trade direction. Otherwise it is grade B.
+  min_carry: 0.5
+
+# Your own read beats the bot. Pairs listed here are sent to MT5 exactly as you set them
+# (BUY, SELL or NEUTRAL) and marked grade M.
+overrides: {}
+#   USDCHF: SELL
+#   EURUSD: NEUTRAL
+
+mt5:
+  # Folder the EA reads from: MT5's Common\Files. "auto" finds it inside Wine prefixes
+  # (~/.mt5, ~/.wine, ...). Set a path here if you run MT5 somewhere else.
+  common_files_dir: auto
