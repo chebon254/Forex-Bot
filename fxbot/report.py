@@ -120,3 +120,61 @@ def backtest(result: dict) -> str:
 def _table(df: pd.DataFrame) -> str:
     text = df.to_string(float_format=lambda v: f"{v:,.2f}")
     return "\n".join("    " + line for line in text.splitlines())
+
+
+def lab(fx: dict, index: dict) -> str:
+    """Strategy lab results: fixed textbook rules, long history, retail costs."""
+    num = lambda df: df.round(2).to_string()
+    indent = lambda text: "\n".join("  " + line for line in text.splitlines())
+    return "\n".join([
+        _paint("Strategy lab - textbook rules fixed in advance, FRED/BIS data, retail costs", BOLD),
+        "",
+        _paint("FOREX  (Sharpe: return per unit of risk; t_stat above ~2 = unlikely to be luck;", BOLD),
+        _paint("        growth/drawdown shown at 10% yearly volatility so strategies compare fairly)", BOLD),
+        indent(num(fx["table"])),
+        "",
+        "  Sharpe by decade, dollar pairs, after retail swaps:",
+        indent(num(fx["decades"])),
+        "",
+        _paint("STOCK INDEX  (1x exposure, no leverage; CFD longs pay Fed funds + 2.5%/yr)", BOLD),
+        indent(num(index["table"])),
+        "",
+        "  Sharpe by decade, after CFD financing:",
+        indent(num(index["decades"])),
+    ])
+
+
+def intraday(res: dict) -> str:
+    """Intraday test: London open to New York midday on FBS 15-minute bars."""
+    d, b, n = res["bias_drift"], res["bias_msb"], res["msb_no_bias"]
+    line = lambda name, s: (f"  {name:<42} {s['trades']:>7,} trades  win {s['win_%']:4.1f}%  "
+                            f"avg {s['avg_r']:+.3f}R  t {s['t_stat']:+5.1f}  total {s['total_r']:+9.1f}R")
+    return "\n".join([
+        _paint("Intraday: London open (10:00 server) to New York midday (19:00), FBS 15-minute bars", BOLD),
+        f"  {'bias only (open at London, close at midday)':<42} {d['trades']:>7,} trades  win {d['win_%']:4.1f}%  "
+        f"avg {d['avg_pips']:+.2f} pips  t {d['t_stat']:+5.1f}",
+        line("your strategy (bias + 15-minute MSB)", b),
+        line("same entries without the bias", n),
+        "",
+        "  your strategy, R by year: " + "  ".join(f"{y}:{r:+.0f}" for y, r in b["by_year"].items()),
+        f"  median stop {b['median_stop_pips']:.0f} pips; exits {b['exits']}",
+        "  Costs: FBS's recorded spread on every trade + 0.3 pips slippage.",
+    ])
+
+
+def indexlab(res: dict) -> str:
+    """IndexBot stress tests."""
+    num = lambda df, **kw: "\n".join("  " + line for line in df.round(2).to_string(**kw).splitlines())
+    s = res["settings"]
+    default = s[(s.trend_days == 200) & (s.rsi_below == 10) & (s.exit_days == 5)].sharpe.iloc[0]
+    return "\n".join([
+        _paint("IndexBot stress tests (both rules at 0.5x; FBS-like costs: 4%/yr swap, 1 bp spread)", BOLD),
+        "", _paint("1) Same rules, unchanged, on other markets", BOLD), num(res["markets"]),
+        "", _paint("2) Nearby settings on NASDAQ 100 1986-2026 (Sharpe)", BOLD),
+        f"  27 combinations: min {s.sharpe.min():.2f}, median {s.sharpe.median():.2f}, max {s.sharpe.max():.2f}; default {default:.2f}",
+        num(s.pivot_table(index=["trend_days", "rsi_below"], columns="exit_days", values="sharpe")),
+        "", _paint("3) Higher costs", BOLD), num(res["costs"], index=False),
+        "", _paint("4) Luck: 2,000 ten-year paths stitched from one-year blocks of 1986-2026", BOLD), num(res["luck"]),
+        "", _paint("5) MT5 not running at 22:45 on some days", BOLD), num(res["missed_days"]),
+        "", _paint("6) EA vs rules, trade by trade (FBS US100, 2020-2026)", BOLD), num(res["parity"]),
+    ])

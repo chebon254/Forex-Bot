@@ -11,7 +11,7 @@ import requests
 from .currencies import BIS_AREAS, PRIORITY
 
 BIS_URL = "https://stats.bis.org/api/v1/data/WS_CBPOL/D.{areas}"
-BIS_CACHE = "bis_policy_rates.csv"
+BIS_CACHE = "bis_policy_rates_{year}.csv"
 
 _ROW = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S | re.I)
 _CELL = re.compile(r"<td[^>]*>(.*?)</td>", re.S | re.I)
@@ -52,7 +52,7 @@ def bis_history(data_dir: Path, max_age_hours: float = 24, start: str = "1999-01
     Conventions differ slightly from the Forex Chart table (BIS uses the middle of the Fed's
     target range and the ECB deposit rate), which moves a differential by at most ~0.15.
     """
-    path = Path(data_dir) / BIS_CACHE
+    path = Path(data_dir) / BIS_CACHE.format(year=start[:4])
     if path.exists() and time.time() - path.stat().st_mtime < max_age_hours * 3600:
         raw = pd.read_csv(path)
     else:

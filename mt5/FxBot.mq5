@@ -101,9 +101,10 @@ public:
    datetime          sigExpires;
    datetime          sigNextTry;
    string            sigComment;
+   bool              sigWarned;
 
                      CMarket(void) : ok(false), lastBar(0), trend(0), lastBreak("-"), cursor(-1),
-                     sigDir(0), sigSL(0), sigTP(0), sigExpires(0), sigNextTry(0), sigComment("") {}
+                     sigDir(0), sigSL(0), sigTP(0), sigExpires(0), sigNextTry(0), sigComment(""), sigWarned(false) {}
 
    void              ClearBias(void)
      {
@@ -447,6 +448,7 @@ void QueueSignal(CMarket *m, const int dir, const double sl, const double tp, co
    m.sigExpires = TimeCurrent() + InpSignalValidHours * 3600;
    m.sigNextTry = 0;
    m.sigComment = comment;
+   m.sigWarned  = false;
    TrySignal(m);
   }
 
@@ -498,12 +500,18 @@ void TrySignal(CMarket *m)
    bool sent = m.sigDir > 0 ? g_trade.Buy(lots, sym, price, m.sigSL, m.sigTP, m.sigComment)
                : g_trade.Sell(lots, sym, price, m.sigSL, m.sigTP, m.sigComment);
    uint code = g_trade.ResultRetcode();
-   LogResult(sym, sent, m.sigDir > 0 ? "buy" : "sell", lots, price, m.sigSL, m.sigTP);
    if(!Succeeded(sent, code) && IsTransient(code))
      {
-      m.sigNextTry = TimeCurrent() + 60; // e.g. requote or Algo Trading switched off: retry shortly
+      // e.g. the session opens a few minutes after the daily candle, a requote, or Algo Trading
+      // switched off: say so once, then retry every minute until the signal expires
+      if(!m.sigWarned)
+         PrintFormat("%s: %s not possible yet (%s) - retrying every minute", sym, m.sigDir > 0 ? "buy" : "sell",
+                     g_trade.ResultRetcodeDescription());
+      m.sigWarned  = true;
+      m.sigNextTry = TimeCurrent() + 60;
       return;
      }
+   LogResult(sym, sent, m.sigDir > 0 ? "buy" : "sell", lots, price, m.sigSL, m.sigTP);
    m.sigDir = 0;
   }
 

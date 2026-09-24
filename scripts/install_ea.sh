@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copy the FxBot EA into MetaTrader 5 (under Wine) and compile it with MetaEditor.
-# Re-run after every change to mt5/FxBot.mq5.
+# Copy the EAs in mt5/ into MetaTrader 5 (under Wine) and compile them with MetaEditor.
+# Re-run after every change to an .mq5 file.  Usage: scripts/install_ea.sh [FxBot|IndexBot]
 set -euo pipefail
 
 export WINEPREFIX="${WINEPREFIX:-$HOME/.mt5}"
@@ -18,24 +18,28 @@ if [ -z "$MQL5_DIR" ] || [ ! -d "$MQL5_DIR" ]; then
   exit 1
 fi
 
-DEST="$MQL5_DIR/Experts/FxBot"
-mkdir -p "$DEST"
-cp "$HERE/mt5/FxBot.mq5" "$DEST/FxBot.mq5"
-rm -f "$DEST/FxBot.log" "$DEST/FxBot.ex5"
+if [ $# -gt 0 ]; then names=("$@"); else names=(); for f in "$HERE"/mt5/*.mq5; do names+=("$(basename "$f" .mq5)"); done; fi
 
-echo "Compiling $DEST/FxBot.mq5"
-# Paths relative to the data folder: Wine re-quotes absolute "C:\Program Files\..." arguments
-# in a way MetaEditor does not understand. Its exit code is not meaningful; the log is.
-(cd "$(dirname "$MQL5_DIR")" && wine "$MT5_DIR/MetaEditor64.exe" \
-  /compile:'MQL5\Experts\FxBot\FxBot.mq5' /log:'MQL5\Experts\FxBot\FxBot.log') || true
-
-if [ -f "$DEST/FxBot.log" ]; then
-  iconv -f UTF-16 -t UTF-8 "$DEST/FxBot.log" | tr -d '\r' | grep -E 'error|warning|Result' || true
-fi
-if [ -f "$DEST/FxBot.ex5" ]; then
-  echo "OK: $DEST/FxBot.ex5"
-  echo "In MT5 it appears under Navigator > Expert Advisors > FxBot (right-click > Refresh if needed)."
-else
-  echo "Compile failed - see the messages above." >&2
-  exit 1
-fi
+failed=0
+for name in "${names[@]}"; do
+  DEST="$MQL5_DIR/Experts/$name"
+  mkdir -p "$DEST"
+  cp "$HERE/mt5/$name.mq5" "$DEST/$name.mq5"
+  rm -f "$DEST/$name.log" "$DEST/$name.ex5"
+  echo "Compiling $name"
+  # Paths relative to the data folder: Wine re-quotes absolute "C:\Program Files\..." arguments
+  # in a way MetaEditor does not understand. Its exit code is not meaningful; the log is.
+  (cd "$(dirname "$MQL5_DIR")" && wine "$MT5_DIR/MetaEditor64.exe" \
+    /compile:"MQL5\\Experts\\$name\\$name.mq5" /log:"MQL5\\Experts\\$name\\$name.log") || true
+  if [ -f "$DEST/$name.log" ]; then
+    iconv -f UTF-16 -t UTF-8 "$DEST/$name.log" | tr -d '\r' | grep -E 'error|warning|Result' || true
+  fi
+  if [ -f "$DEST/$name.ex5" ]; then
+    echo "OK: $DEST/$name.ex5"
+  else
+    echo "$name: compile failed - see the messages above." >&2
+    failed=1
+  fi
+done
+[ "$failed" = 0 ] && echo "In MT5 they appear under Navigator > Expert Advisors (right-click > Refresh if needed)."
+exit "$failed"

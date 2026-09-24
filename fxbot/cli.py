@@ -34,6 +34,9 @@ def main(argv=None) -> int:
     bt.add_argument("--trades-csv", help="save every simulated trade to this CSV")
 
     sub.add_parser("paths", help="show where the bias files go")
+    sub.add_parser("lab", help="test well-known strategies (trend, carry, stock index) on 50 years of data")
+    sub.add_parser("indexlab", help="IndexBot stress tests: other markets, settings, costs, luck, missed days, EA parity")
+    sub.add_parser("intraday", help="your strategy as a day trade, London open to New York midday (needs ExportBars data)")
 
     args = parser.parse_args(argv)
     cfg = config.load(args.config)
@@ -88,5 +91,20 @@ def main(argv=None) -> int:
 
             pd.DataFrame([asdict(t) for t in result["trades"]]).to_csv(args.trades_csv, index=False)
             print(f"\nTrades saved to {args.trades_csv}")
+        return 0
+    if args.command == "lab":
+        from . import lab  # pandas-heavy; only needed here
+
+        print(report.lab(lab.run(cfg), lab.index_lab(cfg)))
+        return 0
+    if args.command == "indexlab":
+        from . import indexlab  # pandas-heavy; only needed here
+
+        print(report.indexlab(indexlab.run(cfg)))
+        return 0
+    if args.command == "intraday":
+        from . import intraday  # pandas-heavy; only needed here
+
+        print(report.intraday(intraday.run(cfg)))
         return 0
     return 2

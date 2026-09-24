@@ -157,7 +157,10 @@ def simulate_pair(symbol: str, px: pd.Series, bias_rows: pd.DataFrame, p: SimPar
         if pos is not None:
             d = pos["dir"]
             if (d < 0 and price >= pos["stop"]) or (d > 0 and price <= pos["stop"]):
-                trades.append(finish(pos, dates[t], pos["stop"], "stop"))
+                # With closing prices only, a breach is first seen at a close, so exit there.
+                # (Filling at the stop level instead would be optimistic: it keeps the close-only
+                # view's fewer stop-outs but not its worse fills. A real stop also fires on wicks.)
+                trades.append(finish(pos, dates[t], price, "stop"))
                 pos = None
             elif (d < 0 and price <= pos["target"]) or (d > 0 and price >= pos["target"]):
                 trades.append(finish(pos, dates[t], pos["target"], "target"))

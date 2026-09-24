@@ -31,11 +31,14 @@ def test_sell_bias_trades_the_bearish_msb_and_reaches_target():
 
 
 def test_buy_bias_ignores_bearish_breaks_and_gets_stopped_on_the_msb_down():
-    # the bullish MSB at 12.5 is taken; the fall to 9.5 closes below its stop at 10
+    # the bullish MSB at 12.5 is taken (stop 10); the close at 9.5 breaches the stop and the
+    # exit happens at that close, which is worse than the stop level: -1.2R, not -1R
     px = series(DIAGRAM)
     trades = simulate_pair("EURUSD", px, weekly_bias(px, "BUY"), P)
     assert len(trades) == 1
-    assert (trades[0].direction, trades[0].entry, trades[0].outcome, trades[0].r) == (1, 12.5, "stop", -1.0)
+    t = trades[0]
+    assert (t.direction, t.entry, t.stop, t.exit, t.outcome) == (1, 12.5, 10, 9.5, "stop")
+    assert t.r == pytest.approx(-1.2)
 
 
 def test_grade_b_is_skipped_unless_allowed():

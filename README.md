@@ -28,27 +28,99 @@ Why this split: the official MetaTrader5 Python package only works on Windows. A
 | Then analyse the chart for a market structure break | The EA marks swing highs/lows (HH, HL, LH, LL) and trades the **MSB**: the first close beyond the last swing *against* the trend, in the bias direction |
 | Sell it when high / buy low | Stop beyond the high (or low) of the breaking leg, target 2× the risk. A "wait for the retracement" limit entry exists but tested worse (below) |
 
-## Read this before trading: what 26 years of history say
+## Read this before trading: the backtests say it does not make money yet
 
-`fxbot backtest` replays every weekly COT report since 2000 (1,396 weeks) against daily closes of all 28 pairs.
+**On FBS's own data** (MT5 Strategy Tester, 2016-01-01 to 2026-09-24, daily chart, 1-minute OHLC, 98% history quality, $10,000 at 0.5% risk):
 
-**1. The fundamental bias alone does not predict direction.** Over the next 1 or 4 weeks, pairs moved the bot's way ~50% of the time (t-stat 0.4, where ~2 would mean a real edge). Every other reading of the COT data I tried (26-week average, COT-index extremes, with or against large speculators) was also indistinguishable from chance. The reason shows in the data: commercials are net long *after* their currency has fallen (correlation −0.6), so "above zero" is a bet that the fall reverses. That bet alone doesn't pay.
+| trades | win rate | net profit | profit factor | avg per trade | max drawdown |
+|---|---|---|---|---|---|
+| 116 | 30% | **−$408 (−4.1%)** | 0.86 | −0.13R | 11.2% |
 
-**2. Combined with the market structure break, it does show a small edge.** Entering at the close of the MSB candle in the bias direction:
+Real stops fire on intraday wicks and swings form on wicks too, so the trades differ from a closing-price test: of the Python winners that also traded in MT5, about a third were stopped out by a wick first. Swaps were small (+$95 over ten years).
 
-| | trades | per year | win rate | avg per trade | profit factor | worst drawdown |
-|---|---|---|---|---|---|---|
-| **EA defaults** (MSB, grade A, enter at the break, 2R target) | 432 | 16 | 41% | **+0.15R** | 1.25 | 29R |
-| Same MSB entries without your COT/rates filter | 3,280 | 122 | 35% | +0.05R | 1.08 | 65R |
-| "Sell it when high": limit at 50% of the leg | 241 | 9 | 32% | −0.08R | 0.88 | 39R |
+**Python research** (`fxbot backtest`, FRED daily closes, every weekly COT report since 2000, all 28 pairs):
 
-- Your filter triples the average trade (+0.05R → +0.15R), with an eighth of the trades and half the drawdown. That is the idea on your page: fundamentals give the direction, structure gives the timing.
-- It held in both halves of history (2000–2012: +0.11R, 2013–2026: +0.18R), in every nearby setting tried (+0.05R to +0.17R), and with doubled trading costs (+0.13R).
-- The limit entry loses because fills come mostly from breaks that fail: good trades run away without you, bad ones come back and fill you.
+1. **The fundamental bias alone does not predict direction.** Over the next 1 or 4 weeks pairs moved the bot's way ~50% of the time (t-stat 0.4, where ~2 would mean a real edge). Every other reading of the COT data tried (26-week average, COT-index extremes, with or against large speculators) was also chance-level. Commercials are net long *after* their currency has fallen (correlation −0.6), so "above zero" is a bet that the fall reverses, and on its own that bet doesn't pay.
+2. **With the market structure break it is roughly break-even, before real-world wicks:**
 
-**3. It is still modest and not proven.** +0.15R × 16 trades ≈ 2.4R a year, with a 29R worst drawdown and losing years (2008: −17R). The t-stat is 2.2, which is borderline, and about 15 variants were tried, so part of it may be luck. These tests use daily closes only (no intraday wicks) and ignore swaps. Treat it as *promising*: confirm it in MT5's Strategy Tester on FBS data, then on a demo account, before real money.
+| | trades | win rate | avg per trade | profit factor | worst drawdown |
+|---|---|---|---|---|---|
+| EA defaults (MSB, grade A, enter at the break, 2R) | 432 | 41% | −0.03R | 0.97 | 51R |
+| Same MSB entries without your COT/rates filter | 3,280 | 35% | −0.11R | 0.86 | 395R |
+| "Sell it when high": limit at 50% of the leg | 241 | 32% | −0.55R | 0.53 | 143R |
+
+- Your filter does carry information: it turns −0.11R into −0.03R per trade. It is not enough to beat the costs of trading.
+- The limit entry is worst because fills come mostly from breaks that fail: good trades run away without you, bad ones come back and fill you.
+- An earlier version of this backtest reported +0.15R per trade. It checked stops only at the daily close but filled them at the stop price, which is too kind; the MT5 run exposed it and it is fixed.
+
+**What this means:** don't fund a real account expecting this to make money. Run it on demo, or use it to test changes to the idea, and judge any change by an MT5 run on FBS data covering years you didn't tune it on.
 
 **Money:** stops sit beyond daily swings, a median of ~190 pips. With FBS's 0.01-lot minimum, risking 0.5% per trade needs roughly **$3,800** on a standard account (1% needs ~$1,900); below that the EA skips trades rather than over-risk. Up to 10 trades were open at once historically.
+
+## Strategy lab: what else was tested
+
+`fxbot lab` runs textbook strategies with their standard settings (fixed before looking at results) on long free histories, after retail costs:
+
+| Market | Strategy | Sharpe after costs | Sharpe 2015–2026 | Verdict |
+|---|---|---|---|---|
+| Forex, dollar pairs 1975–2026 | trend (12-month momentum) | 0.39 | −0.14 | worked until ~2004, not since |
+| | carry + trend filter | 0.61 | −0.26 | same story |
+| Forex, all 28 pairs 2000–2026 | best of six (carry) | 0.24 (t 1.25) | – | not reliable |
+| NASDAQ 100 (US100 CFD), 1986–2026 | hold only above the 200-day average | 0.45 | 0.70 | held up in every decade since 1995 |
+| | RSI-2 dip-buying in an uptrend | 0.41 | 0.50 | held up since 1995, in the market 12% of the time |
+| | buy and hold (benchmark) | 0.42 | 0.66 | – |
+
+Caveats: the NASDAQ was the best-performing index of this era, so choosing it is partly hindsight; CFD financing is assumed at the Fed funds rate + 2.5%/yr (FBS's real US100 swap turned out to be ~4%/yr); drawdowns were still 40–65%.
+
+## Your strategy as a day trade (London open → New York midday)
+
+`fxbot intraday` tests the COT/rates bias with 15-minute market structure breaks, trading only from 08:00 London (10:00 server) to 12:00 New York (19:00 server), on FBS's own 15-minute bars 2010–2026 with FBS's recorded spreads + 0.3 pips slippage:
+
+| | trades | win rate | avg per trade | t-stat | total |
+|---|---|---|---|---|---|
+| Bias only: open at London, close at midday | 10,541 | 49.5% | −0.7 pips | −1.3 | – |
+| **Your strategy intraday (bias + 15-min MSB, 2R)** | 6,859 | 42% | **−0.05R** | −4.5 | −356R |
+| Same entries without the bias | 118,356 | 39% | −0.10R | −34.7 | −11,835R |
+
+Before costs it has a tiny edge (+0.03R per trade, t +2.2), but FBS's spreads (0.8 pips on EURUSD up to 6 pips on GBPCAD) plus slippage cost ~0.08R per trade on the typical 29-pip stop. A 1R target or a plain midday exit lose the same. It lost in 15 of 17 years. Intraday trading makes costs a much bigger share of each trade.
+
+Reproduce: export the bars once (`EA=ExportBars SYMBOL=EURUSD PERIOD=M15 MODEL=2 scripts/mt5_backtest.sh 2010.01.01`, MT5 closed), then `.venv/bin/fxbot intraday`.
+
+## IndexBot: NASDAQ 100 (`US100`)
+
+`mt5/IndexBot.mq5` trades the two index rules that held up, on daily candles, acting once a day at **22:45 server time** (just before the US close) with that price as the day's close:
+
+- **Trend** (0.5× equity): hold US100 while it closes above its 200-day average.
+- **Dip** (0.5× equity): buy when the 2-day RSI closes below 10 while above the 200-day average; sell on a close above the 5-day average.
+
+| | Python, 1986–2026 (NASDAQ 100, CFD costs) | MT5 on FBS data, 2020-05 → 2026-09 |
+|---|---|---|
+| **Both (default)** | Sharpe 0.51, ~5.6%/yr, worst drawdown 38% | **+107%**, worst drawdown 13%, 65 trades |
+| Trend only (1×) | Sharpe 0.45, ~6.7%/yr, worst drawdown 65% | +196%, worst drawdown 17%, 8 trades |
+| Dip only (1×) | Sharpe 0.41, ~3.7%/yr, worst drawdown 40% | +36%, worst drawdown 10%, 57 trades |
+| Buy and hold (1×) | Sharpe 0.42 | same window in Python: +151%, worst drawdown 38% |
+
+- Python and MT5 agree on the same window (both rules: +104% vs +107%, drawdown 13.6% vs 13.0%), so the EA trades the rules as tested.
+- FBS only has minute data for US100 from May 2020, so MT5 cannot test earlier years; the long Python history covers them.
+- 2020–2026 was an unusually strong NASDAQ run. Expect something closer to the 40-year numbers.
+- FBS charges about 4%/yr of the position's value to hold US100 long overnight; the MT5 numbers include it.
+- **Size:** 1 lot = $10 per point, so the smallest trade (0.01 lot) is worth ~$3,000 at today's prices. The default (0.5× per rule) needs ~$6,000 of equity; below that it skips trades rather than borrow more.
+- **Timing:** MT5 must be running at 22:45 server time (22:45 Kenya time from late March to late October, 23:45 in winter).
+
+### IndexBot stress tests (`fxbot indexlab`)
+
+| Test | Result |
+|---|---|
+| EA vs the rules, trade by trade (FBS, 2020–2026) | 93% (trend) and 90% (dip) of orders on the same day and side; the rest fall on days missing from the exported 15-minute data |
+| 27 nearby settings (150/200/250-day, RSI 5/10/15, 3/5/10-day exit), NASDAQ 100 1986–2026 | Sharpe 0.49 to 0.62, default 0.56: not a lucky setting |
+| Higher costs (FBS swap is ~4%/yr) | swap 2%: 0.63 · 4%: 0.56 · 6%: 0.49 · 8%: 0.42; spreads barely matter |
+| 2,000 ten-year histories (one-year blocks of 1986–2026) | median 6.3%/yr (worst 5%: 0.1%/yr), median worst drawdown 22% (worst 5%: 36%), 4% chance of a losing decade (holding the index: 13%) |
+| MT5 off at 22:45 on 10–30% of days | no real change; at 50% of days, Sharpe 0.56 → 0.49 |
+| **Same rules on FBS's other indices, 2013–2026** | beats holding only on the NASDAQ (US100 Sharpe 0.74 vs 0.69, with a third of the drawdown); about equal on US500; worse than holding on US30, DE30, JP225, EU50, FR40, ES35; loses on UK100 and HK50. The dip rule alone was positive on 8 of 10 indices. |
+
+**Verdict:** the EA trades the rules exactly and the settings are not a fluke, but the profit comes from the NASDAQ's long uptrend. It is a smoother way to hold the NASDAQ (similar long-run return, about half the drawdown), not something that makes money in any market. Use it on US100 only.
+
+Run it: open a US100 chart, drag **IndexBot** onto it, tick *Allow Algo Trading*. Backtest: `EA=IndexBot SYMBOL=US100 scripts/mt5_backtest.sh 2020.06.01` (MT5 closed first).
 
 ## Setup (already done on this machine)
 
@@ -122,8 +194,10 @@ Also useful: `fxbot backtest --help` for the Python research runs (`--no-bias`, 
 ```
 fxbot/          Python: cot.py (CFTC), rates.py (your site + BIS), bias.py (your rules),
                 structure.py (swings/MSB - twin of the EA), backtest.py, export.py, cli.py
-mt5/FxBot.mq5   the Expert Advisor
-scripts/        install_mt5.sh, install_ea.sh, install_timer.sh, mt5_backtest.sh
+fxbot/lab.py    strategy lab (`fxbot lab`): trend, carry, COT and index rules on long history
+mt5/FxBot.mq5   the forex EA (COT + interest rates + market structure)
+mt5/IndexBot.mq5  the NASDAQ 100 EA (200-day trend + RSI-2 dips)
+scripts/        install_mt5.sh, install_ea.sh (compiles every EA), install_timer.sh, mt5_backtest.sh
 config.yaml     your settings and overrides
 tests/          pytest suite (.venv/bin/python -m pytest)
 trade.py        older Quotex experiment; not used by FxBot
