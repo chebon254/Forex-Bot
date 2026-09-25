@@ -122,6 +122,20 @@ Reproduce: export the bars once (`EA=ExportBars SYMBOL=EURUSD PERIOD=M15 MODEL=2
 
 Run it: open a US100 chart, drag **IndexBot** onto it, tick *Allow Algo Trading*. Backtest: `EA=IndexBot SYMBOL=US100 scripts/mt5_backtest.sh 2020.06.01` (MT5 closed first).
 
+## MarketStructure indicator (chart tool, never trades)
+
+`mt5/indicators/MarketStructure.mq5` draws your strategy on any chart, for trading by hand:
+
+- **Swing labels:** first `H`/`L` in grey, then `HH`, `HL` in green (bullish structure) and `LH`, `LL` in red (bearish).
+- **Breaks:** a dashed line from the broken swing to the candle that closed through it, labelled **MSB** (first break against the trend: your market structure break) or **BOS** (break in the trend's direction).
+- **Panel** (bottom-left): the trend on this timeframe and on a higher one (daily by default), the pair's weekly **COT + interest-rate bias** (BUY/SELL, grade, carry, which currency is bullish or bearish, COT report date) and whether the structure agrees with the bias. The bias covers the 28 currency pairs; it comes from `fxbot export`, which the 6-hourly timer keeps fresh.
+- **Alerts** (off by default): a pop-up and/or a push to the MetaTrader phone app when an MSB appears, by default only when it matches the bias.
+- Nothing repaints: a swing label appears once 3 candles have closed after it, a break only when a candle closes through the level.
+
+Add it: Navigator → **Indicators → MarketStructure** → drag onto a chart. To have it on every new chart, right-click the chart → **Templates → Save Template** → `default`.
+
+The same signals traded mechanically did not beat FBS's costs (see the backtests above), so any edge has to come from your judgment: log every trade and prove it on demo first.
+
 ## Setup (already done on this machine)
 
 ```bash

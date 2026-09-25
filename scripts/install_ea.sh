@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copy the EAs in mt5/ into MetaTrader 5 (under Wine) and compile them with MetaEditor.
-# Re-run after every change to an .mq5 file.  Usage: scripts/install_ea.sh [FxBot|IndexBot]
+# Copy the EAs (mt5/) and indicators (mt5/indicators/) into MetaTrader 5 under Wine and compile
+# them with MetaEditor. Re-run after every change.  Usage: scripts/install_ea.sh [name ...]
 set -euo pipefail
 
 export WINEPREFIX="${WINEPREFIX:-$HOME/.mt5}"
@@ -18,19 +18,31 @@ if [ -z "$MQL5_DIR" ] || [ ! -d "$MQL5_DIR" ]; then
   exit 1
 fi
 
-if [ $# -gt 0 ]; then names=("$@"); else names=(); for f in "$HERE"/mt5/*.mq5; do names+=("$(basename "$f" .mq5)"); done; fi
+# EAs live in mt5/*.mq5 (-> MQL5/Experts/<name>/), indicators in mt5/indicators/*.mq5 (-> MQL5/Indicators/<name>/).
+targets=()
+if [ $# -gt 0 ]; then
+  for name in "$@"; do
+    if [ -f "$HERE/mt5/$name.mq5" ]; then targets+=("Experts|$HERE/mt5/$name.mq5")
+    elif [ -f "$HERE/mt5/indicators/$name.mq5" ]; then targets+=("Indicators|$HERE/mt5/indicators/$name.mq5")
+    else echo "No mt5/$name.mq5 or mt5/indicators/$name.mq5" >&2; exit 1; fi
+  done
+else
+  for f in "$HERE"/mt5/*.mq5; do targets+=("Experts|$f"); done
+  for f in "$HERE"/mt5/indicators/*.mq5; do [ -e "$f" ] && targets+=("Indicators|$f"); done
+fi
 
 failed=0
-for name in "${names[@]}"; do
-  DEST="$MQL5_DIR/Experts/$name"
+for t in "${targets[@]}"; do
+  kind="${t%%|*}"; src="${t#*|}"; name="$(basename "$src" .mq5)"
+  DEST="$MQL5_DIR/$kind/$name"
   mkdir -p "$DEST"
-  cp "$HERE/mt5/$name.mq5" "$DEST/$name.mq5"
+  cp "$src" "$DEST/$name.mq5"
   rm -f "$DEST/$name.log" "$DEST/$name.ex5"
-  echo "Compiling $name"
+  echo "Compiling $kind/$name"
   # Paths relative to the data folder: Wine re-quotes absolute "C:\Program Files\..." arguments
   # in a way MetaEditor does not understand. Its exit code is not meaningful; the log is.
   (cd "$(dirname "$MQL5_DIR")" && wine "$MT5_DIR/MetaEditor64.exe" \
-    /compile:"MQL5\\Experts\\$name\\$name.mq5" /log:"MQL5\\Experts\\$name\\$name.log") || true
+    /compile:"MQL5\\$kind\\$name\\$name.mq5" /log:"MQL5\\$kind\\$name\\$name.log") || true
   if [ -f "$DEST/$name.log" ]; then
     iconv -f UTF-16 -t UTF-8 "$DEST/$name.log" | tr -d '\r' | grep -E 'error|warning|Result' || true
   fi
@@ -41,5 +53,5 @@ for name in "${names[@]}"; do
     failed=1
   fi
 done
-[ "$failed" = 0 ] && echo "In MT5 they appear under Navigator > Expert Advisors (right-click > Refresh if needed)."
+[ "$failed" = 0 ] && echo "In MT5 they appear in the Navigator under Expert Advisors / Indicators (right-click > Refresh if needed)."
 exit "$failed"
